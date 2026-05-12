@@ -380,24 +380,24 @@ export async function mergeFragments(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
-  // merge content
+  // merge content — defer image references until after copy
   const pad = (n: number) => String(n).padStart(2, "0");
   const parts = resolved.map((f) => {
     const d = new Date(f.timestamp);
     const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    return `### ${time}\n\n${f.content}`;
+    return { time, content: f.content, images: f.images };
   });
-  const mergedContent = parts.join("\n\n");
 
-  // collect tags, images, types
+  // create merged fragment first (without images in content)
+  const bodyOnly = parts.map((p) => `### ${p.time}\n\n${p.content}`).join("\n\n");
+
   const allTags = [...new Set(resolved.flatMap((f) => f.tags))];
   const dominantType = resolved[0].type;
 
-  // create merged fragment
   const merged = await writeFragment(
     projectSlug,
     dominantType,
-    mergedContent,
+    bodyOnly,
     allTags,
     [],
     [],
@@ -407,46 +407,52 @@ export async function mergeFragments(
   // copy source images into merged fragment's images dir
   const mergedImagesDir = path.join(PROJECTS_DIR, projectSlug, "images", merged.id);
   let imgIndex = 0;
-  for (const f of resolved) {
+  const perFragmentImageMap: Map<number, string[]> = new Map(); // idx -> new paths
+
+  for (let fi = 0; fi < resolved.length; fi++) {
+    const f = resolved[fi];
     const srcDir = path.join(PROJECTS_DIR, projectSlug, "images", f.id);
-    if (!existsSync(srcDir)) {
-      // try old location (~/.vibedaily) for pre-migration fragments
-      const oldDir = path.join(OLD_BASE, "projects", projectSlug, "images", f.id);
-      if (existsSync(oldDir)) {
-        ensureDir(mergedImagesDir);
-        const files = await fs.readdir(oldDir);
-        for (const file of files) {
-          const ext = path.extname(file);
-          const dest = path.join(mergedImagesDir, `${imgIndex}${ext}`);
-          copyFileSync(path.join(oldDir, file), dest);
-          imgIndex++;
-        }
-      }
-      continue;
-    }
+    const altDir = path.join(OLD_BASE, "projects", projectSlug, "images", f.id);
+    const dir = existsSync(srcDir) ? srcDir : existsSync(altDir) ? altDir : null;
+    if (!dir) continue;
+
     ensureDir(mergedImagesDir);
-    const files = await fs.readdir(srcDir);
+    const files = await fs.readdir(dir);
+    const newPaths: string[] = [];
     for (const file of files) {
       const ext = path.extname(file);
       const dest = path.join(mergedImagesDir, `${imgIndex}${ext}`);
-      copyFileSync(path.join(srcDir, file), dest);
+      copyFileSync(path.join(dir, file), dest);
+      newPaths.push(`images/${merged.id}/${imgIndex}${ext}`);
       imgIndex++;
     }
+    perFragmentImageMap.set(fi, newPaths);
   }
 
-  // update frontmatter with new relative image paths
-  if (imgIndex > 0) {
-    const newImages: string[] = [];
-    const newDirFiles = await fs.readdir(mergedImagesDir);
-    for (const file of newDirFiles) {
-      newImages.push(`images/${merged.id}/${file}`);
+  // rebuild content with inline image references
+  const finalParts = parts.map((p, i) => {
+    const imgs = perFragmentImageMap.get(i);
+    let block = `### ${p.time}\n\n${p.content}`;
+    if (imgs && imgs.length > 0) {
+      block += "\n\n" + imgs.map((ip) => `![图片](${ip})`).join("\n");
     }
-    const fm = await fs.readFile(merged.path, "utf-8");
-    const parsed = matter(fm);
-    (parsed.data as Record<string, unknown>).images = newImages;
-    await fs.writeFile(merged.path, matter.stringify(mergedContent, parsed.data));
-    merged.images = newImages;
+    return block;
+  });
+  const mergedContent = finalParts.join("\n\n");
+
+  // collect all new image paths
+  const allImages: string[] = [];
+  for (const paths of perFragmentImageMap.values()) {
+    allImages.push(...paths);
   }
+
+  // update fragment with final content + image frontmatter
+  const fm = await fs.readFile(merged.path, "utf-8");
+  const parsed = matter(fm);
+  (parsed.data as Record<string, unknown>).images = allImages;
+  await fs.writeFile(merged.path, matter.stringify(mergedContent, parsed.data));
+  merged.images = allImages;
+  merged.content = mergedContent;
 
   // optionally delete source fragments (and their image dirs)
   if (deleteSource) {
