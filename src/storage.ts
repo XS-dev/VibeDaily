@@ -541,7 +541,7 @@ export async function listFragments(
     : (await listProjects()).map((p) => p.slug);
 
   for (const slug of projects) {
-    const fragDir = path.join(PROJECTS_DIR, slug, "fragments");
+    const fragDir = path.join(projectDir(slug), "fragments");
     if (!existsSync(fragDir)) continue;
     const files = await fs.readdir(fragDir);
     for (const file of files) {
@@ -591,7 +591,7 @@ export async function searchFragments(
 
   const projects = await listProjects();
   for (const proj of projects) {
-    const fragDir = path.join(PROJECTS_DIR, proj.slug, "fragments");
+    const fragDir = path.join(projectDir(proj.slug), "fragments");
     if (!existsSync(fragDir)) continue;
     const files = await fs.readdir(fragDir);
     for (const file of files) {
