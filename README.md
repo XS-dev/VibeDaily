@@ -75,13 +75,19 @@ The MCP server is auto-configured via `.mcp.json` — Claude Code starts it auto
 
 ### Image Support
 
-Attach images to any diary entry. When Claude Code has an image (pasted via `Ctrl+V`), you can pass it to `jot` or `quick_jot`:
+Two ways to attach images — file paths and base64 data URLs:
 
-```
-/j 今天的午餐，番茄不错
+```text
+# File path (from Ctrl+V paste)
+记日记：今天的午餐   ← image passed as `images`
+
+# Base64 data URL (immune to temp file cleanup)
+/data:image/png;base64,iVBORw0...
 ```
 
-Images are copied to `~/.vibedaily/projects/{slug}/images/{fragment-id}/` and appear when you review the fragment.
+**Validation:** max 10MB/image. Allowed: PNG, JPEG, GIF, WebP, SVG. Warnings shown for invalid inputs — no silent failures.
+
+Images are stored as relative paths in `./vibedaily-data/projects/{slug}/images/{fragment-id}/`.
 
 ### Type Auto-Inference
 
@@ -97,7 +103,7 @@ Project-level type (`diary` / `novel`) takes precedence over keyword matching.
 ## Data Structure
 
 ```
-~/.vibedaily/
+vibedaily-data/                   (project root, .gitignored)
   config.json                     — Global config (current project)
   projects/{slug}/
     meta.json                     — Project metadata

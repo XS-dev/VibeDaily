@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
+import { cpSync } from "node:fs";
 import path from "node:path";
-import { existsSync, mkdirSync, copyFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import matter from "gray-matter";
 import type {
   Fragment,
@@ -12,12 +13,24 @@ import type {
   ProjectType,
 } from "./types.js";
 
-const BASE = path.join(
+const BASE = path.join(process.cwd(), "vibedaily-data");
+const OLD_BASE = path.join(
   process.env.HOME || process.env.USERPROFILE || "",
   ".vibedaily"
 );
 const PROJECTS_DIR = path.join(BASE, "projects");
 const CONFIG_PATH = path.join(BASE, "config.json");
+
+function migrateOldData() {
+  const oldProjects = path.join(OLD_BASE, "projects");
+  const oldConfig = path.join(OLD_BASE, "config.json");
+  if (existsSync(oldProjects) && !existsSync(PROJECTS_DIR)) {
+    cpSync(oldProjects, PROJECTS_DIR, { recursive: true, force: true });
+  }
+  if (existsSync(oldConfig) && !existsSync(CONFIG_PATH)) {
+    copyFileSync(oldConfig, CONFIG_PATH);
+  }
+}
 
 // ---- helpers ----
 
@@ -48,6 +61,7 @@ function timestampFile(): string {
 
 export function init(): string {
   ensureDir(BASE);
+  migrateOldData();
   ensureDir(PROJECTS_DIR);
   if (!existsSync(CONFIG_PATH)) {
     fs.writeFile(CONFIG_PATH, JSON.stringify({ currentProject: null }, null, 2));
@@ -135,24 +149,89 @@ export async function createProject(
 
 // ---- images ----
 
+const ALLOWED_IMAGE_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/svg+xml",
+];
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+
+const MIME_TO_EXT: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+  "image/svg+xml": ".svg",
+};
+
+function isDataUrl(s: string): boolean {
+  return s.startsWith("data:");
+}
+
+function decodeDataUrl(s: string): { data: Buffer; mimeType: string } | null {
+  const match = s.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  return { mimeType: match[1], data: Buffer.from(match[2], "base64") };
+}
+
 async function saveImages(
   projectSlug: string,
   fragmentId: string,
-  imagePaths: string[]
-): Promise<string[]> {
-  if (!imagePaths || imagePaths.length === 0) return [];
+  sources: string[]
+): Promise<{ paths: string[]; warnings: string[] }> {
+  if (!sources || sources.length === 0) return { paths: [], warnings: [] };
   const imagesDir = path.join(PROJECTS_DIR, projectSlug, "images", fragmentId);
   ensureDir(imagesDir);
   const saved: string[] = [];
-  for (let i = 0; i < imagePaths.length; i++) {
-    const src = imagePaths[i];
-    if (!existsSync(src)) continue;
-    const ext = path.extname(src) || ".png";
-    const dest = path.join(imagesDir, `${i}${ext}`);
-    copyFileSync(src, dest);
-    saved.push(dest);
+  const warnings: string[] = [];
+
+  for (let i = 0; i < sources.length; i++) {
+    const src = sources[i];
+
+    if (isDataUrl(src)) {
+      // ---- base64 / data URL path ----
+      const decoded = decodeDataUrl(src);
+      if (!decoded) {
+        warnings.push(`Invalid data URL at index ${i}`);
+        continue;
+      }
+      if (decoded.data.length > MAX_IMAGE_SIZE) {
+        warnings.push(
+          `Image too large (${(decoded.data.length / 1024 / 1024).toFixed(1)}MB > 10MB) at index ${i}`
+        );
+        continue;
+      }
+      if (!ALLOWED_IMAGE_TYPES.includes(decoded.mimeType)) {
+        warnings.push(`Unsupported image type: ${decoded.mimeType} at index ${i}`);
+        continue;
+      }
+      const ext = MIME_TO_EXT[decoded.mimeType] || ".png";
+      const dest = path.join(imagesDir, `${i}${ext}`);
+      writeFileSync(dest, decoded.data);
+      saved.push(`images/${fragmentId}/${i}${ext}`);
+    } else {
+      // ---- file path ----
+      if (!existsSync(src)) {
+        warnings.push(`Image not found: ${src}`);
+        continue;
+      }
+      const stat = statSync(src);
+      if (stat.size > MAX_IMAGE_SIZE) {
+        warnings.push(
+          `Image too large (${(stat.size / 1024 / 1024).toFixed(1)}MB > 10MB): ${src}`
+        );
+        continue;
+      }
+      const ext = path.extname(src) || ".png";
+      const dest = path.join(imagesDir, `${i}${ext}`);
+      copyFileSync(src, dest);
+      saved.push(`images/${fragmentId}/${i}${ext}`);
+    }
   }
-  return saved;
+
+  return { paths: saved, warnings };
 }
 
 // ---- fragments ----
@@ -177,7 +256,7 @@ export async function writeFragment(
   const ts = new Date().toISOString();
   const id = generateId();
 
-  const images = await saveImages(projectSlug, id, imagePaths);
+  const { paths: images, warnings: imageWarnings } = await saveImages(projectSlug, id, imagePaths);
 
   const fm: Record<string, unknown> = {
     id,
@@ -187,6 +266,7 @@ export async function writeFragment(
     characters: characterIds,
     places: placeIds,
     images,
+    imageWarnings,
     timestamp: ts,
   };
 
@@ -202,6 +282,7 @@ export async function writeFragment(
     characters: characterIds,
     places: placeIds,
     images,
+    imageWarnings,
     timestamp: ts,
     content,
   };
@@ -231,10 +312,13 @@ export async function updateFragment(
 
   const newContent = updates.content ?? frag.content;
   let newImages = frag.images;
+  let newImageWarnings: string[] = [];
   if (updates.images !== undefined) {
     const imagesDir = path.join(PROJECTS_DIR, projectSlug, "images", fragmentId);
     if (existsSync(imagesDir)) rmSync(imagesDir, { recursive: true, force: true });
-    newImages = await saveImages(projectSlug, fragmentId, updates.images);
+    const result = await saveImages(projectSlug, fragmentId, updates.images);
+    newImages = result.paths;
+    newImageWarnings = result.warnings;
   }
 
   const fm: Record<string, unknown> = {
@@ -245,6 +329,7 @@ export async function updateFragment(
     characters: updates.characters ?? frag.characters,
     places: updates.places ?? frag.places,
     images: newImages,
+    imageWarnings: newImageWarnings.length > 0 ? newImageWarnings : frag.imageWarnings,
     timestamp: frag.timestamp,
   };
 
@@ -258,6 +343,7 @@ export async function updateFragment(
     characters: updates.characters ?? frag.characters,
     places: updates.places ?? frag.places,
     images: newImages,
+    imageWarnings: newImageWarnings.length > 0 ? newImageWarnings : frag.imageWarnings,
     content: newContent,
   };
 }
@@ -315,6 +401,7 @@ export async function listFragments(
         characters: (fm.characters as string[]) || [],
         places: (fm.places as string[]) || [],
         images: (fm.images as string[]) || [],
+        imageWarnings: (fm.imageWarnings as string[]) || [],
         timestamp: (fm.timestamp as string) || "",
         content: parsed.content || "",
       });
@@ -356,6 +443,7 @@ export async function searchFragments(
         characters: (fm.characters as string[]) || [],
         places: (fm.places as string[]) || [],
         images: (fm.images as string[]) || [],
+        imageWarnings: (fm.imageWarnings as string[]) || [],
         timestamp: (fm.timestamp as string) || "",
         content: parsed.content || "",
       });
@@ -391,6 +479,7 @@ async function findFragmentById(
         characters: (fm.characters as string[]) || [],
         places: (fm.places as string[]) || [],
         images: (fm.images as string[]) || [],
+        imageWarnings: (fm.imageWarnings as string[]) || [],
         timestamp: (fm.timestamp as string) || "",
         content: parsed.content || "",
       };

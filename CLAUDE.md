@@ -25,15 +25,18 @@ src/
   types.ts     — Shared TypeScript types
 ```
 
-Data stored at `~/.vibedaily/`:
+Data stored at `./vibedaily-data/` (project root):
 ```
 projects/{slug}/
   meta.json         — Project metadata
   characters.json   — Novel character profiles
   places.json       — Location profiles
   fragments/*.md    — Timestamped Markdown with YAML frontmatter
+  images/{fragment-id}/*  — Attached images
 config.json         — Global config (currentProject)
 ```
+
+On first run, existing data is migrated from `~/.vibedaily/` automatically.
 
 ## Key design decisions
 
@@ -51,12 +54,12 @@ Registered via `.mcp.json` at the repo root. Use a relative path (`dist/index.js
 ### Data Model
 
 - **Project** — diary or novel. Has a slug (URL-safe name), type, description, and optional tags.
-- **Fragment** — a single piece of writing. Has a type, content, timestamp, tags, images, and optional associations to characters and places.
+- **Fragment** — a single piece of writing. Has a type, content, timestamp, tags, images (relative paths), imageWarnings, and optional associations.
 - **Character** (novel projects) — name, aliases, description, personality traits, notes.
 - **Place** (novel projects) — name, description, notes.
 - **Global config** — stores `currentProject` for default-project convenience.
 
-Storage: Markdown files with YAML frontmatter (gray-matter) under `~/.vibedaily/`. Human-readable, git-friendly.
+Storage: Markdown files with YAML frontmatter indexed under `./vibedaily-data/`. Human-readable, git-friendly. Migrated from `~/.vibedaily/` on first run.
 
 ### Fragment Types & Auto-Inference
 
@@ -69,6 +72,19 @@ When `jot` is called without an explicit `type`, the system infers one:
 - **note** — fallback when nothing else matches.
 
 If the project itself has a type (`diary` or `novel`), that takes precedence over keyword matching.
+
+### Image Support
+
+Images can be attached via two parameters on `jot`, `quick_jot`, and `update_fragment`:
+
+| Parameter | Source | Format | Notes |
+|-----------|--------|--------|-------|
+| `images` | File paths | Absolute path | Temp files from Ctrl+V paste. Must be handled immediately — files are cleaned quickly. |
+| `imageAttachments` | Data URLs | `data:image/png;base64,...` | Immune to temp file cleanup. Decoded and written as binary. |
+
+**Validation:** max 10MB per image. Allowed types: `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`. Violations produce `warnings` in the response — no silent failure.
+
+**Storage:** Images copied to `vibedaily-data/projects/{slug}/images/{fragment-id}/`. Frontmatter stores relative paths (e.g., `images/mp2xxx/0.png`). Old images are cleaned on `delete_fragment` and on `update_fragment` when replaced.
 
 ### All 17 Tools
 

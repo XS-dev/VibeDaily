@@ -10,6 +10,7 @@ export interface Fragment {
   characters: string[];
   places: string[];
   images: string[];
+  imageWarnings: string[];
   timestamp: string;
   content: string;
 }

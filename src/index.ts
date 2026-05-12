@@ -79,9 +79,13 @@ server.registerTool(
         .array(z.string())
         .optional()
         .describe("Image file paths to attach"),
+      imageAttachments: z
+        .array(z.string())
+        .optional()
+        .describe("Base64 data URLs (data:image/...;base64,...) — use when temp files are already cleaned up"),
     },
   },
-  async ({ content, project, type, tags, characters, places, images }) => {
+  async ({ content, project, type, tags, characters, places, images, imageAttachments }) => {
     const config = await s.readConfig();
     const proj = project || config.currentProject;
     if (!proj)
@@ -100,6 +104,7 @@ server.registerTool(
       inferType(content, projMeta?.type) ||
       "note";
 
+    const allImages = [...(images || []), ...(imageAttachments || [])];
     const frag = await s.writeFragment(
       proj,
       resolvedType,
@@ -107,28 +112,29 @@ server.registerTool(
       tags || [],
       characters || [],
       places || [],
-      images || []
+      allImages
     );
+
+    const response: Record<string, unknown> = {
+      ok: true,
+      fragment: {
+        id: frag.id,
+        type: frag.type,
+        project: frag.project,
+        tags: frag.tags,
+        timestamp: frag.timestamp,
+        preview: frag.content.slice(0, 80) + (frag.content.length > 80 ? "..." : ""),
+      },
+    };
+    if (frag.imageWarnings.length > 0) {
+      response.warnings = frag.imageWarnings;
+    }
 
     return {
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify(
-            {
-              ok: true,
-              fragment: {
-                id: frag.id,
-                type: frag.type,
-                project: frag.project,
-                tags: frag.tags,
-                timestamp: frag.timestamp,
-                preview: frag.content.slice(0, 80) + (frag.content.length > 80 ? "..." : ""),
-              },
-            },
-            null,
-            2
-          ),
+          text: JSON.stringify(response, null, 2),
         },
       ],
     };
@@ -150,9 +156,13 @@ server.registerTool(
         .array(z.string())
         .optional()
         .describe("Image file paths to attach"),
+      imageAttachments: z
+        .array(z.string())
+        .optional()
+        .describe("Base64 data URLs — use when temp files are already cleaned up"),
     },
   },
-  async ({ content, images }) => {
+  async ({ content, images, imageAttachments }) => {
     const config = await s.readConfig();
     let proj = config.currentProject;
 
@@ -171,6 +181,7 @@ server.registerTool(
     }
 
     const today = new Date().toISOString().slice(0, 10);
+    const allImages = [...(images || []), ...(imageAttachments || [])];
     const frag = await s.writeFragment(
       proj,
       "diary",
@@ -178,18 +189,23 @@ server.registerTool(
       [today],
       [],
       [],
-      images || []
+      allImages
     );
+
+    const result: Record<string, unknown> = {
+      ok: true,
+      id: frag.id,
+      preview: frag.content.slice(0, 60) + (frag.content.length > 60 ? "..." : ""),
+    };
+    if (frag.imageWarnings.length > 0) {
+      result.warnings = frag.imageWarnings;
+    }
 
     return {
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify({
-            ok: true,
-            id: frag.id,
-            preview: frag.content.slice(0, 60) + (frag.content.length > 60 ? "..." : ""),
-          }),
+          text: JSON.stringify(result),
         },
       ],
     };
@@ -267,6 +283,7 @@ server.registerTool(
               characters: f.characters,
               places: f.places,
               images: f.images,
+              imageWarnings: f.imageWarnings,
               timestamp: f.timestamp,
               content: f.content,
             },
@@ -295,26 +312,36 @@ server.registerTool(
       characters: z.array(z.string()).optional(),
       places: z.array(z.string()).optional(),
       images: z.array(z.string()).optional().describe("New image file paths"),
+      imageAttachments: z.array(z.string()).optional().describe("New base64 data URLs"),
     },
   },
-  async ({ id, project, content, type, tags, characters, places, images }) => {
+  async ({ id, project, content, type, tags, characters, places, images, imageAttachments }) => {
+    const allImages = [...(images || []), ...(imageAttachments || [])];
     const updated = await s.updateFragment(project, id, {
       content,
       type,
       tags,
       characters,
       places,
-      images,
+      images: allImages.length > 0 ? allImages : undefined,
     });
     if (!updated)
       return {
         content: [{ type: "text" as const, text: "Fragment not found." }],
       };
+    const resp: Record<string, unknown> = {
+      ok: true,
+      fragment: { id: updated.id, timestamp: updated.timestamp },
+    };
+    if (updated.imageWarnings.length > 0) {
+      resp.warnings = updated.imageWarnings;
+    }
+
     return {
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify({ ok: true, fragment: { id: updated.id, timestamp: updated.timestamp } }, null, 2),
+          text: JSON.stringify(resp, null, 2),
         },
       ],
     };
