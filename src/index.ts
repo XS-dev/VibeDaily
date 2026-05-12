@@ -75,9 +75,13 @@ server.registerTool(
         .array(z.string())
         .optional()
         .describe("Place IDs to associate with this fragment"),
+      images: z
+        .array(z.string())
+        .optional()
+        .describe("Image file paths to attach"),
     },
   },
-  async ({ content, project, type, tags, characters, places }) => {
+  async ({ content, project, type, tags, characters, places, images }) => {
     const config = await s.readConfig();
     const proj = project || config.currentProject;
     if (!proj)
@@ -102,7 +106,8 @@ server.registerTool(
       content,
       tags || [],
       characters || [],
-      places || []
+      places || [],
+      images || []
     );
 
     return {
@@ -124,6 +129,74 @@ server.registerTool(
             null,
             2
           ),
+        },
+      ],
+    };
+  }
+);
+
+// ============================
+// Core: quick_jot — minimal-friction diary entry
+// ============================
+server.registerTool(
+  "quick_jot",
+  {
+    description:
+      "Ultra-low-friction diary entry. Auto-uses current project (or creates a default '日记' project), " +
+      "type is always 'diary', auto-tags with today's date. Use this for the fastest possible recording.",
+    inputSchema: {
+      content: z.string().describe("The diary content to record"),
+      images: z
+        .array(z.string())
+        .optional()
+        .describe("Image file paths to attach"),
+    },
+  },
+  async ({ content, images }) => {
+    const config = await s.readConfig();
+    let proj = config.currentProject;
+
+    if (!proj) {
+      // auto-create default diary project
+      try {
+        const meta = await s.createProject("日记", "diary", "日常日记");
+        proj = meta.slug;
+        config.currentProject = proj;
+        await s.writeConfig(config);
+      } catch {
+        // project may already exist from race; try listing
+        const projects = await s.listProjects();
+        const diary = projects.find((p) => p.type === "diary");
+        proj = diary?.slug || "日记";
+        if (!diary) {
+          const meta = await s.createProject("日记", "diary", "日常日记");
+          proj = meta.slug;
+        }
+        config.currentProject = proj;
+        await s.writeConfig(config);
+      }
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const frag = await s.writeFragment(
+      proj,
+      "diary",
+      content,
+      [today],
+      [],
+      [],
+      images || []
+    );
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify({
+            ok: true,
+            id: frag.id,
+            preview: frag.content.slice(0, 60) + (frag.content.length > 60 ? "..." : ""),
+          }),
         },
       ],
     };
@@ -200,6 +273,7 @@ server.registerTool(
               tags: f.tags,
               characters: f.characters,
               places: f.places,
+              images: f.images,
               timestamp: f.timestamp,
               content: f.content,
             },
@@ -227,15 +301,17 @@ server.registerTool(
       tags: z.array(z.string()).optional(),
       characters: z.array(z.string()).optional(),
       places: z.array(z.string()).optional(),
+      images: z.array(z.string()).optional().describe("New image file paths"),
     },
   },
-  async ({ id, project, content, type, tags, characters, places }) => {
+  async ({ id, project, content, type, tags, characters, places, images }) => {
     const updated = await s.updateFragment(project, id, {
       content,
       type,
       tags,
       characters,
       places,
+      images,
     });
     if (!updated)
       return {
@@ -602,10 +678,13 @@ server.registerTool(
       };
     }
 
-    const parts = fragments.map(
-      (f, i) =>
-        `--- Fragment ${i + 1} [${f.id}] [${f.type}] [${f.timestamp}] ---\n${f.content}`
-    );
+    const parts = fragments.map((f, i) => {
+      let header = `--- Fragment ${i + 1} [${f.id}] [${f.type}] [${f.timestamp}]`;
+      if (f.images && f.images.length > 0) {
+        header += ` [images: ${f.images.join(", ")}]`;
+      }
+      return `${header} ---\n${f.content}`;
+    });
     const body = parts.join("\n\n");
 
     return {

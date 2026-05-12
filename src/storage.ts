@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync } from "node:fs";
 import matter from "gray-matter";
 import type {
   Fragment,
@@ -133,6 +133,28 @@ export async function createProject(
   return meta;
 }
 
+// ---- images ----
+
+async function saveImages(
+  projectSlug: string,
+  fragmentId: string,
+  imagePaths: string[]
+): Promise<string[]> {
+  if (!imagePaths || imagePaths.length === 0) return [];
+  const imagesDir = path.join(PROJECTS_DIR, projectSlug, "images", fragmentId);
+  ensureDir(imagesDir);
+  const saved: string[] = [];
+  for (let i = 0; i < imagePaths.length; i++) {
+    const src = imagePaths[i];
+    if (!existsSync(src)) continue;
+    const ext = path.extname(src) || ".png";
+    const dest = path.join(imagesDir, `${i}${ext}`);
+    copyFileSync(src, dest);
+    saved.push(dest);
+  }
+  return saved;
+}
+
 // ---- fragments ----
 
 export async function writeFragment(
@@ -141,7 +163,8 @@ export async function writeFragment(
   content: string,
   tags: string[],
   characterIds: string[],
-  placeIds: string[]
+  placeIds: string[],
+  imagePaths: string[] = []
 ): Promise<Fragment> {
   init();
   const projectDir = path.join(PROJECTS_DIR, projectSlug);
@@ -154,6 +177,8 @@ export async function writeFragment(
   const ts = new Date().toISOString();
   const id = generateId();
 
+  const images = await saveImages(projectSlug, id, imagePaths);
+
   const fm: Record<string, unknown> = {
     id,
     type,
@@ -161,6 +186,7 @@ export async function writeFragment(
     tags,
     characters: characterIds,
     places: placeIds,
+    images,
     timestamp: ts,
   };
 
@@ -175,6 +201,7 @@ export async function writeFragment(
     tags,
     characters: characterIds,
     places: placeIds,
+    images,
     timestamp: ts,
     content,
   };
@@ -196,12 +223,18 @@ export async function updateFragment(
     tags?: string[];
     characters?: string[];
     places?: string[];
+    images?: string[];
   }
 ): Promise<Fragment | null> {
   const frag = await findFragmentById(projectSlug, fragmentId);
   if (!frag) return null;
 
   const newContent = updates.content ?? frag.content;
+  const newImages =
+    updates.images !== undefined
+      ? await saveImages(projectSlug, fragmentId, updates.images)
+      : frag.images;
+
   const fm: Record<string, unknown> = {
     id: frag.id,
     type: updates.type ?? frag.type,
@@ -209,6 +242,7 @@ export async function updateFragment(
     tags: updates.tags ?? frag.tags,
     characters: updates.characters ?? frag.characters,
     places: updates.places ?? frag.places,
+    images: newImages,
     timestamp: frag.timestamp,
   };
 
@@ -221,6 +255,7 @@ export async function updateFragment(
     tags: updates.tags ?? frag.tags,
     characters: updates.characters ?? frag.characters,
     places: updates.places ?? frag.places,
+    images: newImages,
     content: newContent,
   };
 }
@@ -275,6 +310,7 @@ export async function listFragments(
         tags: (fm.tags as string[]) || [],
         characters: (fm.characters as string[]) || [],
         places: (fm.places as string[]) || [],
+        images: (fm.images as string[]) || [],
         timestamp: (fm.timestamp as string) || "",
         content: parsed.content || "",
       });
@@ -315,6 +351,7 @@ export async function searchFragments(
         tags: (fm.tags as string[]) || [],
         characters: (fm.characters as string[]) || [],
         places: (fm.places as string[]) || [],
+        images: (fm.images as string[]) || [],
         timestamp: (fm.timestamp as string) || "",
         content: parsed.content || "",
       });
@@ -349,6 +386,7 @@ async function findFragmentById(
         tags: (fm.tags as string[]) || [],
         characters: (fm.characters as string[]) || [],
         places: (fm.places as string[]) || [],
+        images: (fm.images as string[]) || [],
         timestamp: (fm.timestamp as string) || "",
         content: parsed.content || "",
       };

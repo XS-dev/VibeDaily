@@ -108,3 +108,24 @@ If the project itself has a type (`diary` or `novel`), that takes precedence ove
 | Tool | Description |
 |------|-------------|
 | `weave` | Select fragments by ID or filter (project/type/tags), then returns their full content for Claude to stitch into a coherent narrative — a diary entry or novel chapter. |
+
+## VibeDaily Usage — Auto-Trigger Rules
+
+When the user says any of the following, use the VibeDaily MCP `jot` tool immediately:
+
+| Trigger | Example |
+|---------|---------|
+| `记一下：...` | 记一下：刚刚想到一个有意思的点子 |
+| `记日记：...` 或 `写日记：...` | 写日记：今天中午去吃了塔斯汀 |
+| `jot: ...` 或 `j ...` | j 有点焦虑，任务太模糊了 |
+| `记录：...` 或 `帮我记录：...` | 帮我记录：开会讨论了插件架构 |
+| `diary: ...` | diary: feeling productive today |
+| `/j ...` | /j 等待AI回复时的碎片时间很适合写日记 |
+
+**Rules:**
+- Call `jot` (or `quick_jot` if available) immediately. Do NOT ask for confirmation.
+- Do not rewrite the user's content. Save it verbatim.
+- After saving, reply with a one-line confirmation: fragment ID and brief preview.
+- If the project is ambiguous, default to "日记" for Chinese diary content, or the current active project.
+
+When the user asks to review past entries, use `list_fragments`, `get_fragment`, or `weave` as appropriate.
