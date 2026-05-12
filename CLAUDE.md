@@ -127,5 +127,6 @@ When the user says any of the following, use the VibeDaily MCP `jot` tool immedi
 - Do not rewrite the user's content. Save it verbatim.
 - After saving, reply with a one-line confirmation: fragment ID and brief preview.
 - If the project is ambiguous, default to "日记" for Chinese diary content, or the current active project.
+- **When the user pastes an image (Ctrl+V) during a diary entry, pass its file path as the `images` parameter to `jot` or `quick_jot`.**
 
 When the user asks to review past entries, use `list_fragments`, `get_fragment`, or `weave` as appropriate.
