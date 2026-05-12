@@ -391,7 +391,6 @@ export async function mergeFragments(
 
   // collect tags, images, types
   const allTags = [...new Set(resolved.flatMap((f) => f.tags))];
-  const allImages = resolved.flatMap((f) => f.images);
   const dominantType = resolved[0].type;
 
   // create merged fragment
@@ -402,19 +401,54 @@ export async function mergeFragments(
     allTags,
     [],
     [],
-    [] // images already referenced by path; no new source files
+    []
   );
 
-  // overwrite the images field to reference all source images
-  if (allImages.length > 0) {
-    const fm = await fs.readFile(merged.path, "utf-8");
-    const parsed = matter(fm);
-    (parsed.data as Record<string, unknown>).images = allImages;
-    await fs.writeFile(merged.path, matter.stringify(mergedContent, parsed.data));
-    merged.images = allImages;
+  // copy source images into merged fragment's images dir
+  const mergedImagesDir = path.join(PROJECTS_DIR, projectSlug, "images", merged.id);
+  let imgIndex = 0;
+  for (const f of resolved) {
+    const srcDir = path.join(PROJECTS_DIR, projectSlug, "images", f.id);
+    if (!existsSync(srcDir)) {
+      // try old location (~/.vibedaily) for pre-migration fragments
+      const oldDir = path.join(OLD_BASE, "projects", projectSlug, "images", f.id);
+      if (existsSync(oldDir)) {
+        ensureDir(mergedImagesDir);
+        const files = await fs.readdir(oldDir);
+        for (const file of files) {
+          const ext = path.extname(file);
+          const dest = path.join(mergedImagesDir, `${imgIndex}${ext}`);
+          copyFileSync(path.join(oldDir, file), dest);
+          imgIndex++;
+        }
+      }
+      continue;
+    }
+    ensureDir(mergedImagesDir);
+    const files = await fs.readdir(srcDir);
+    for (const file of files) {
+      const ext = path.extname(file);
+      const dest = path.join(mergedImagesDir, `${imgIndex}${ext}`);
+      copyFileSync(path.join(srcDir, file), dest);
+      imgIndex++;
+    }
   }
 
-  // optionally delete source fragments
+  // update frontmatter with new relative image paths
+  if (imgIndex > 0) {
+    const newImages: string[] = [];
+    const newDirFiles = await fs.readdir(mergedImagesDir);
+    for (const file of newDirFiles) {
+      newImages.push(`images/${merged.id}/${file}`);
+    }
+    const fm = await fs.readFile(merged.path, "utf-8");
+    const parsed = matter(fm);
+    (parsed.data as Record<string, unknown>).images = newImages;
+    await fs.writeFile(merged.path, matter.stringify(mergedContent, parsed.data));
+    merged.images = newImages;
+  }
+
+  // optionally delete source fragments (and their image dirs)
   if (deleteSource) {
     for (const f of resolved) {
       await deleteFragment(projectSlug, f.id);
