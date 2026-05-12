@@ -1,0 +1,84 @@
+<svg width="1200" height="360" viewBox="0 0 1200 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="360" fill="#0B0F19"/>
+
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#111827" stroke-width="1"/>
+    </pattern>
+
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2L10 6L2 10" fill="none" stroke="#7DD3FC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="360" fill="url(#grid)" opacity="0.85"/>
+  <rect x="18" y="18" width="1164" height="324" rx="24" stroke="#1E293B" stroke-width="2"/>
+
+  <text x="72" y="72" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="700">
+    VibeDaily workflow
+  </text>
+  <text x="72" y="108" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18">
+    Capture fragmented thoughts inside Claude Code, then store them as local Markdown files.
+  </text>
+
+  <!-- Node 1 -->
+  <rect x="72" y="160" width="210" height="104" rx="18" fill="#111827" stroke="#475569" stroke-width="1.5"/>
+  <circle cx="104" cy="193" r="10" fill="#7DD3FC"/>
+  <text x="130" y="199" fill="#E5E7EB" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">
+    User
+  </text>
+  <text x="104" y="236" fill="#CBD5E1" font-family="Inter, Arial, sans-serif" font-size="20">
+    “记一下 ...”
+  </text>
+
+  <!-- Arrow 1 -->
+  <line x1="302" y1="212" x2="382" y2="212" stroke="#7DD3FC" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- Node 2 -->
+  <rect x="402" y="160" width="210" height="104" rx="18" fill="#111827" stroke="#475569" stroke-width="1.5"/>
+  <rect x="434" y="183" width="26" height="20" rx="4" fill="#1E293B" stroke="#7DD3FC"/>
+  <text x="476" y="199" fill="#E5E7EB" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">
+    Claude Code
+  </text>
+  <text x="434" y="236" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18">
+    routes the intent
+  </text>
+
+  <!-- Arrow 2 -->
+  <line x1="632" y1="212" x2="712" y2="212" stroke="#7DD3FC" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- Node 3 -->
+  <rect x="732" y="150" width="230" height="124" rx="20" fill="#0F172A" stroke="#7DD3FC" stroke-width="2"/>
+  <path d="M766 192C766 181.5 774.5 173 785 173H811C821.5 173 830 181.5 830 192C830 202.5 821.5 211 811 211H785C774.5 211 766 202.5 766 192Z" fill="#111827" stroke="#7DD3FC"/>
+  <circle cx="785" cy="192" r="5" fill="#34D399"/>
+  <circle cx="808" cy="192" r="5" fill="#C4B5FD"/>
+  <text x="766" y="236" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">
+    VibeDaily MCP
+  </text>
+  <text x="766" y="258" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">
+    saves the fragment
+  </text>
+
+  <!-- Arrow 3 -->
+  <line x1="982" y1="212" x2="1062" y2="212" stroke="#7DD3FC" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- Node 4 -->
+  <rect x="1082" y="160" width="46" height="104" rx="12" fill="#111827" stroke="#475569" stroke-width="1.5"/>
+  <rect x="1094" y="178" width="70" height="86" rx="12" fill="#111827" stroke="#475569" stroke-width="1.5"/>
+  <text x="1026" y="305" fill="#E5E7EB" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">
+    Markdown files
+  </text>
+  <text x="1022" y="330" fill="#94A3B8" font-family="SFMono-Regular, Consolas, monospace" font-size="17">
+    ~/.vibedaily/
+  </text>
+
+  <!-- File lines -->
+  <line x1="1108" y1="200" x2="1146" y2="200" stroke="#334155" stroke-width="2"/>
+  <line x1="1108" y1="220" x2="1150" y2="220" stroke="#334155" stroke-width="2"/>
+  <line x1="1108" y1="240" x2="1138" y2="240" stroke="#334155" stroke-width="2"/>
+
+  <!-- Bottom hint -->
+  <text x="72" y="316" fill="#64748B" font-family="SFMono-Regular, Consolas, monospace" font-size="17">
+    /j Today I noticed something worth remembering...
+  </text>
+</svg>
