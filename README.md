@@ -27,9 +27,9 @@ The MCP server auto-starts via `.mcp.json` when you open this project in Claude 
 
 | You say / do... | What happens |
 |-----------------|--------------|
-| `记一下：刚才想到一个点子` | Auto-calls `jot`, saves immediately |
-| `/j 今天有点焦虑` | Same, via shortcut command |
-| `diary: feeling productive` | English auto-trigger too |
+| `diary: just had an idea` | Auto-calls `jot`, saves immediately |
+| `/j feeling anxious about the deadline` | Same, via shortcut command |
+| `jot: discovered a nice pattern` | Type auto-inferred |
 | `Ctrl+V` paste an image | Image attached to fragment |
 
 No terminal switching, no confirmation prompts, no file management.
@@ -84,19 +84,12 @@ Two parameters on `jot`, `quick_jot`, and `update_fragment`:
 
 ### Merge & Append
 
-- **`merge_fragments`** joins multiple fragments into one with `### HH:MM` Markdown headings. Source images are copied to the new fragment's directory and embedded as `![图片](path)` inline. Optional `delete_source` cleans up sources after merge.
+- **`merge_fragments`** joins multiple fragments into one with `### HH:MM` Markdown headings. Source images are copied to the new fragment's directory and embedded as `![image](path)` inline. Optional `delete_source` cleans up sources after merge.
 - **`quick_jot(append: true)`** appends to today's last diary entry with a timestamp heading. Falls back to creating a new fragment if no entry exists today.
 
 ### Type Auto-Inference
 
-When no explicit `type` is given, the tool infers from content keywords:
-
-- **diary** — 今天, 日记, 昨天, 心情, 早上, 晚上
-- **novel** — 角色, 场景, 章节, 小说, chapter
-- **idea** — 灵感, 想法, idea, todo
-- **note** — fallback
-
-Project-level type takes precedence over keyword matching.
+When no explicit `type` is given, the tool infers from content keywords across both English and Chinese. Project-level type (`diary` / `novel`) takes precedence over keyword matching.
 
 ## Data Structure
 
@@ -115,18 +108,16 @@ Fragments are Markdown with gray-matter frontmatter — human-readable, git-frie
 
 ## Usage Examples
 
-```text
-# Quick diary entry
-记一下：今天在等AI干活的时候写了个日记插件
+```
+diary: feeling productive while waiting for the AI to finish
 
-# With /j command
-/j 番茄一块多一个，苹果两块五，樱桃四十一小盒
+/j just finished the plugin — it actually works
 
-# Append to today
-记日记：又想到一件事   (with append: true)
+# Append to today's entry
+jot: one more thought   (with append: true)
 
 # Merge today's fragments
-合并今天的日记
+merge today
 ```
 
 ## Development
