@@ -11,14 +11,11 @@ VibeDaily is an MCP (Model Context Protocol) plugin that turns Claude Code into 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Build TypeScript
 npm run build
 ```
 
-The MCP server is auto-configured via `.mcp.json` — Claude Code starts it automatically when you open this project.
+The MCP server auto-starts via `.mcp.json` when you open this project in Claude Code.
 
 ## Features
 
@@ -26,40 +23,40 @@ The MCP server is auto-configured via `.mcp.json` — Claude Code starts it auto
   <img src="media/workflow.svg" alt="VibeDaily workflow" width="800">
 </p>
 
-### Core: Record in Seconds
+### Zero-Friction Recording
 
-| You say... | VibeDaily does |
-|------------|---------------|
-| `记一下：刚刚想到一个点子` | Auto-calls `jot`, saves as diary/idea |
-| `写日记：今天...` | Saves verbatim, no confirmation needed |
-| `/j 有点焦虑，任务太模糊了` | Same, via shortcut command |
-| `jot this` | Type inferred from English content too |
+| You say / do... | What happens |
+|-----------------|--------------|
+| `记一下：刚才想到一个点子` | Auto-calls `jot`, saves immediately |
+| `/j 今天有点焦虑` | Same, via shortcut command |
+| `diary: feeling productive` | English auto-trigger too |
+| `Ctrl+V` paste an image | Image attached to fragment |
 
-**Zero friction.** Just type. No terminal switching, no file management.
+No terminal switching, no confirmation prompts, no file management.
 
-### 17 MCP Tools
+### 18 MCP Tools
 
-#### Fragment Tools
-| Tool | What it does |
+#### Fragment CRUD
+| Tool | Description |
 |------|-------------|
-| `jot` | Record any fragment (diary/novel/idea/note). Supports tags, images, characters, places. |
-| `quick_jot` | Ultra-low-friction diary entry. Auto-creates "日记" project if none exists. Auto-date-tagged. Fastest way to write. |
-| `list_fragments` | List with filters (project, type, tags). Newest first, with previews. |
-| `get_fragment` | Read in full — content, metadata, images. |
-| `update_fragment` | Edit content, type, tags, images. |
-| `delete_fragment` | Permanent delete by ID. |
+| `jot` | Record a fragment. Content is the only required field. Auto-infers type. Supports tags, characters, places, images, imageAttachments. |
+| `quick_jot` | Ultra-low-friction diary entry. Auto-creates project, auto-date-tags. Supports `append: true` to add to today's last entry. |
+| `list_fragments` | List with filters (project, type, tags). Paginated. Newest first. |
+| `get_fragment` | Read in full — content, metadata, images, warnings. |
+| `update_fragment` | Edit content, type, tags, images. All fields optional. |
+| `delete_fragment` | Permanent delete by ID. Cleans up associated images. |
 | `search_fragments` | Full-text search across all projects. |
 
 #### Project Management
-| Tool | What it does |
+| Tool | Description |
 |------|-------------|
 | `create_project` | New diary or novel project. |
-| `list_projects` | List all projects. |
+| `list_projects` | List all projects with metadata. |
 | `set_current_project` | Set default project for `jot`. |
-| `get_current_project` | Show active project. |
+| `get_current_project` | Show active project slug. |
 
 #### Characters & Places (Novel Writing)
-| Tool | What it does |
+| Tool | Description |
 |------|-------------|
 | `add_character` | Name, aliases, traits, description, notes. |
 | `list_characters` | All characters in a project. |
@@ -69,25 +66,26 @@ The MCP server is auto-configured via `.mcp.json` — Claude Code starts it auto
 | `update_place` | Edit location info. |
 
 #### AI-Assisted Writing
-| Tool | What it does |
+| Tool | Description |
 |------|-------------|
-| `weave` | Select fragments by ID or filter and returns them for Claude to stitch into a coherent diary entry or chapter. |
+| `weave` | Select fragments by ID or filter; returns full content for Claude to stitch into a narrative. |
+| `merge_fragments` | Merge by ID list or date. Optional `delete_source`. Inlines image references. |
 
 ### Image Support
 
-Two ways to attach images — file paths and base64 data URLs:
+Two parameters on `jot`, `quick_jot`, and `update_fragment`:
 
-```text
-# File path (from Ctrl+V paste)
-记日记：今天的午餐   ← image passed as `images`
+| Parameter | Source | Format |
+|-----------|--------|--------|
+| `images` | File paths | Absolute path (from Ctrl+V paste) |
+| `imageAttachments` | Data URLs | `data:image/png;base64,...` |
 
-# Base64 data URL (immune to temp file cleanup)
-/data:image/png;base64,iVBORw0...
-```
+**Validation:** max 10MB/image. Allowed types: PNG, JPEG, GIF, WebP, SVG. Invalid inputs generate warnings — no silent failures. Images stored as relative paths (`../images/`) resolvable from the fragment's Markdown file.
 
-**Validation:** max 10MB/image. Allowed: PNG, JPEG, GIF, WebP, SVG. Warnings shown for invalid inputs — no silent failures.
+### Merge & Append
 
-Images are stored as relative paths in `./vibedaily-data/projects/{slug}/images/{fragment-id}/`.
+- **`merge_fragments`** joins multiple fragments into one with `### HH:MM` Markdown headings. Source images are copied to the new fragment's directory and embedded as `![图片](path)` inline. Optional `delete_source` cleans up sources after merge.
+- **`quick_jot(append: true)`** appends to today's last diary entry with a timestamp heading. Falls back to creating a new fragment if no entry exists today.
 
 ### Type Auto-Inference
 
@@ -98,7 +96,7 @@ When no explicit `type` is given, the tool infers from content keywords:
 - **idea** — 灵感, 想法, idea, todo
 - **note** — fallback
 
-Project-level type (`diary` / `novel`) takes precedence over keyword matching.
+Project-level type takes precedence over keyword matching.
 
 ## Data Structure
 
@@ -113,22 +111,22 @@ vibedaily-data/                   (project root, .gitignored)
     images/{fragment-id}/*        — Attached images
 ```
 
-Fragments are Markdown with gray-matter frontmatter — human-readable, git-friendly.
+Fragments are Markdown with gray-matter frontmatter — human-readable, git-friendly. On first run, existing data is migrated from `~/.vibedaily/`.
 
 ## Usage Examples
 
 ```text
 # Quick diary entry
-记一下：今天在等AI干活的时候写了个日记插件，挺好用的
+记一下：今天在等AI干活的时候写了个日记插件
 
 # With /j command
-/j 番茄一块多一个，苹果两块五，樱桃四十一小盒，告辞
+/j 番茄一块多一个，苹果两块五，樱桃四十一小盒
 
-# Review today
-/today (via list_fragments)
+# Append to today
+记日记：又想到一件事   (with append: true)
 
-# Weave fragments into a coherent entry
-帮我整理一下今天的日记
+# Merge today's fragments
+合并今天的日记
 ```
 
 ## Development
