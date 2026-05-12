@@ -210,7 +210,7 @@ async function saveImages(
       const ext = MIME_TO_EXT[decoded.mimeType] || ".png";
       const dest = path.join(imagesDir, `${i}${ext}`);
       writeFileSync(dest, decoded.data);
-      saved.push(`images/${fragmentId}/${i}${ext}`);
+      saved.push(`../images/${fragmentId}/${i}${ext}`);
     } else {
       // ---- file path ----
       if (!existsSync(src)) {
@@ -227,7 +227,7 @@ async function saveImages(
       const ext = path.extname(src) || ".png";
       const dest = path.join(imagesDir, `${i}${ext}`);
       copyFileSync(src, dest);
-      saved.push(`images/${fragmentId}/${i}${ext}`);
+      saved.push(`../images/${fragmentId}/${i}${ext}`);
     }
   }
 
@@ -423,7 +423,7 @@ export async function mergeFragments(
       const ext = path.extname(file);
       const dest = path.join(mergedImagesDir, `${imgIndex}${ext}`);
       copyFileSync(path.join(dir, file), dest);
-      newPaths.push(`images/${merged.id}/${imgIndex}${ext}`);
+      newPaths.push(`../images/${merged.id}/${imgIndex}${ext}`);
       imgIndex++;
     }
     perFragmentImageMap.set(fi, newPaths);
