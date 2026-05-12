@@ -19,7 +19,7 @@ npm run dev      # Build + run
 
 ```
 src/
-  index.ts     — McpServer instance, all 17 tool registrations, zod/v4 schemas
+  index.ts     — McpServer instance, all 18 tool registrations, zod/v4 schemas
   storage.ts   — Filesystem layer: fragments (Markdown + gray-matter frontmatter),
                  projects, characters, places, global config
   types.ts     — Shared TypeScript types
@@ -125,6 +125,11 @@ Images can be attached via two parameters on `jot`, `quick_jot`, and `update_fra
 | Tool | Description |
 |------|-------------|
 | `weave` | Select fragments by ID or filter (project/type/tags), then returns their full content for Claude to stitch into a coherent narrative — a diary entry or novel chapter. |
+| `merge_fragments` | Merge fragments by ID list or date. Optionally delete sources. Content joined with `### HH:MM` Markdown headings. Preserves image references. |
+
+### quick_jot append mode
+
+When `quick_jot` is called with `append: true`, the content is appended to today's last diary entry with a `### HH:MM` timestamp heading. Falls back to creating a new fragment if no entry exists today. Useful for continuous logging (meetings, debugging sessions) without manual merging.
 
 ## VibeDaily Usage — Auto-Trigger Rules
 

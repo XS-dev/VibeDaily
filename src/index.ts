@@ -160,9 +160,13 @@ server.registerTool(
         .array(z.string())
         .optional()
         .describe("Base64 data URLs — use when temp files are already cleaned up"),
+      append: z
+        .boolean()
+        .default(false)
+        .describe("Append to today's last diary entry instead of creating a new fragment"),
     },
   },
-  async ({ content, images, imageAttachments }) => {
+  async ({ content, images, imageAttachments, append }) => {
     const config = await s.readConfig();
     let proj = config.currentProject;
 
@@ -182,6 +186,45 @@ server.registerTool(
 
     const today = new Date().toISOString().slice(0, 10);
     const allImages = [...(images || []), ...(imageAttachments || [])];
+
+    // ---- append mode: add to today's last fragment ----
+    if (append) {
+      const todaysFrags = await s.listFragments(proj, "diary", undefined, 200);
+      const todayList = todaysFrags
+        .filter((f) => f.timestamp.startsWith(today))
+        .sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
+      const last = todayList.length > 0 ? todayList[todayList.length - 1] : null;
+
+      if (last) {
+        const d = new Date();
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        const appended = `\n\n### ${time}\n\n${content}`;
+
+        const updated = await s.updateFragment(proj, last.id, {
+          content: last.content + appended,
+          images: allImages.length > 0 ? [...last.images, ...allImages] : undefined,
+        });
+        if (updated) {
+          const result: Record<string, unknown> = {
+            ok: true,
+            id: updated.id,
+            appended: true,
+            preview: content.slice(0, 60) + (content.length > 60 ? "..." : ""),
+          };
+          if (updated.imageWarnings.length > 0) {
+            result.warnings = updated.imageWarnings;
+          }
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify(result) }],
+          };
+        }
+      }
+      // fall through to normal jot if no today fragment (or update failed)
+    }
+
     const frag = await s.writeFragment(
       proj,
       "diary",
@@ -643,6 +686,97 @@ server.registerTool(
         {
           type: "text" as const,
           text: JSON.stringify({ ok: true, place: pl }, null, 2),
+        },
+      ],
+    };
+  }
+);
+
+// ============================
+// AI: merge_fragments
+// ============================
+server.registerTool(
+  "merge_fragments",
+  {
+    description:
+      "Merge multiple fragments into one. Provide fragment IDs directly, or use `date` to merge all fragments from a single day. " +
+      "Optionally delete source fragments after merging.",
+    inputSchema: {
+      project: z.string().describe("Project slug"),
+      fragment_ids: z
+        .array(z.string())
+        .optional()
+        .describe("Specific fragment IDs to merge"),
+      date: z
+        .string()
+        .optional()
+        .describe("Merge all fragments from this ISO date (e.g. 2026-05-12). Ignored if fragment_ids is provided."),
+      delete_source: z
+        .boolean()
+        .default(false)
+        .describe("Delete source fragments after merging"),
+    },
+  },
+  async ({ project, fragment_ids, date, delete_source }) => {
+    if (!project) {
+      const config = await s.readConfig();
+      if (!config.currentProject) {
+        return {
+          content: [{ type: "text" as const, text: "No project specified and no current project set." }],
+        };
+      }
+      project = config.currentProject;
+    }
+
+    let ids: string[];
+    if (fragment_ids && fragment_ids.length > 0) {
+      ids = fragment_ids;
+    } else if (date) {
+      const all = await s.listFragments(project, undefined, undefined, 200);
+      ids = all
+        .filter((f) => f.timestamp.startsWith(date))
+        .map((f) => f.id);
+    } else {
+      return {
+        content: [{ type: "text" as const, text: "Provide fragment_ids or a date to merge." }],
+      };
+    }
+
+    if (ids.length < 2) {
+      return {
+        content: [{ type: "text" as const, text: `Need at least 2 fragments to merge. Found: ${ids.length}.` }],
+      };
+    }
+
+    const merged = await s.mergeFragments(project, ids, delete_source);
+    if (!merged) {
+      return {
+        content: [{ type: "text" as const, text: "Merge failed — check that the fragments exist." }],
+      };
+    }
+
+    const result: Record<string, unknown> = {
+      ok: true,
+      merged: {
+        id: merged.id,
+        type: merged.type,
+        timestamp: merged.timestamp,
+        sourceCount: ids.length,
+        preview: merged.content.slice(0, 120) + (merged.content.length > 120 ? "..." : ""),
+      },
+    };
+    if (delete_source) {
+      result.deletedSourceIds = ids;
+    }
+    if (merged.imageWarnings.length > 0) {
+      result.warnings = merged.imageWarnings;
+    }
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(result, null, 2),
         },
       ],
     };

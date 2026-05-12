@@ -360,6 +360,70 @@ export async function deleteFragment(
   return true;
 }
 
+// ---- merge ----
+
+export async function mergeFragments(
+  projectSlug: string,
+  fragmentIds: string[],
+  deleteSource = false
+): Promise<Fragment | null> {
+  if (!fragmentIds || fragmentIds.length === 0) return null;
+
+  // resolve and sort by timestamp
+  const resolved: Fragment[] = [];
+  for (const id of fragmentIds) {
+    const f = await findFragmentById(projectSlug, id);
+    if (f) resolved.push(f);
+  }
+  if (resolved.length === 0) return null;
+  resolved.sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  // merge content
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const parts = resolved.map((f) => {
+    const d = new Date(f.timestamp);
+    const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `### ${time}\n\n${f.content}`;
+  });
+  const mergedContent = parts.join("\n\n");
+
+  // collect tags, images, types
+  const allTags = [...new Set(resolved.flatMap((f) => f.tags))];
+  const allImages = resolved.flatMap((f) => f.images);
+  const dominantType = resolved[0].type;
+
+  // create merged fragment
+  const merged = await writeFragment(
+    projectSlug,
+    dominantType,
+    mergedContent,
+    allTags,
+    [],
+    [],
+    [] // images already referenced by path; no new source files
+  );
+
+  // overwrite the images field to reference all source images
+  if (allImages.length > 0) {
+    const fm = await fs.readFile(merged.path, "utf-8");
+    const parsed = matter(fm);
+    (parsed.data as Record<string, unknown>).images = allImages;
+    await fs.writeFile(merged.path, matter.stringify(mergedContent, parsed.data));
+    merged.images = allImages;
+  }
+
+  // optionally delete source fragments
+  if (deleteSource) {
+    for (const f of resolved) {
+      await deleteFragment(projectSlug, f.id);
+    }
+  }
+
+  return merged;
+}
+
 export async function listFragments(
   projectSlug?: string,
   type?: FragmentType,
