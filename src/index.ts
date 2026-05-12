@@ -184,7 +184,7 @@ server.registerTool(
       await s.writeConfig(config);
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = s.localDateString();
     const allImages = [...(images || []), ...(imageAttachments || [])];
 
     // ---- append mode: add to today's last fragment ----
@@ -205,7 +205,7 @@ server.registerTool(
 
         const updated = await s.updateFragment(proj, last.id, {
           content: last.content + appended,
-          images: allImages.length > 0 ? [...last.images, ...allImages] : undefined,
+          addImages: allImages.length > 0 ? allImages : undefined,
         });
         if (updated) {
           const result: Record<string, unknown> = {
@@ -273,8 +273,8 @@ server.registerTool(
         .array(z.string())
         .optional()
         .describe("Filter by tags (any match)"),
-      limit: z.number().default(50).describe("Max results"),
-      offset: z.number().default(0).describe("Pagination offset"),
+      limit: z.number().int().min(1).max(200).default(50).describe("Max results"),
+      offset: z.number().int().min(0).default(0).describe("Pagination offset"),
     },
   },
   async ({ project, type, tags, limit, offset }) => {
@@ -419,7 +419,7 @@ server.registerTool(
     description: "Full-text search across all fragments.",
     inputSchema: {
       query: z.string().describe("Search keyword"),
-      limit: z.number().default(50),
+      limit: z.number().int().min(1).max(200).default(50),
     },
   },
   async ({ query, limit }) => {
@@ -804,7 +804,7 @@ server.registerTool(
         .array(z.string())
         .optional()
         .describe("Specific fragment IDs to weave (takes priority over filters)"),
-      limit: z.number().default(20).describe("Max fragments to include"),
+      limit: z.number().int().min(1).max(200).default(20).describe("Max fragments to include"),
     },
   },
   async ({ project, type, tags, fragment_ids, limit }) => {

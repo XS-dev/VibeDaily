@@ -19,7 +19,7 @@ npm run dev      # Build + run
 
 ```
 src/
-  index.ts     — McpServer instance, all 18 tool registrations, zod/v4 schemas
+  index.ts     — McpServer instance, all 19 tool registrations, zod/v4 schemas
   storage.ts   — Filesystem layer: fragments (Markdown + gray-matter frontmatter),
                  projects, characters, places, global config
   types.ts     — Shared TypeScript types
@@ -86,7 +86,7 @@ Images can be attached via two parameters on `jot`, `quick_jot`, and `update_fra
 
 **Storage:** Images copied to `vibedaily-data/projects/{slug}/images/{fragment-id}/`. Frontmatter stores relative paths (e.g., `images/mp2xxx/0.png`). Old images are cleaned on `delete_fragment` and on `update_fragment` when replaced.
 
-### All 17 Tools
+### All 19 Tools
 
 #### Fragment CRUD
 | Tool | Description |

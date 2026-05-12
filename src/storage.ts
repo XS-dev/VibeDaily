@@ -49,12 +49,34 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-function timestampFile(): string {
+export function localDateString(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function timestampFile(id: string): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(
     d.getHours()
-  )}${pad(d.getMinutes())}${pad(d.getSeconds())}.md`;
+  )}${pad(d.getMinutes())}${pad(d.getSeconds())}-${id}.md`;
+}
+
+// ---- validation ----
+
+const SAFE_SLUG_RE = /^[a-z0-9一-鿿-]+$/i;
+
+function assertSafeSlug(slug: string): string {
+  if (!SAFE_SLUG_RE.test(slug)) {
+    throw new Error(`Invalid project slug: "${slug}"`);
+  }
+  const root = path.resolve(PROJECTS_DIR);
+  const target = path.resolve(root, slug);
+  if (!target.startsWith(root + path.sep) && target !== root) {
+    throw new Error("Project path escapes data directory");
+  }
+  return target;
 }
 
 // ---- init ----
@@ -64,7 +86,7 @@ export function init(): string {
   migrateOldData();
   ensureDir(PROJECTS_DIR);
   if (!existsSync(CONFIG_PATH)) {
-    fs.writeFile(CONFIG_PATH, JSON.stringify({ currentProject: null }, null, 2));
+    writeFileSync(CONFIG_PATH, JSON.stringify({ currentProject: null }, null, 2));
   }
   return BASE;
 }
@@ -102,6 +124,7 @@ export async function listProjects(): Promise<ProjectMeta[]> {
 }
 
 export async function getProject(slug: string): Promise<ProjectMeta | null> {
+  assertSafeSlug(slug);
   const metaPath = path.join(PROJECTS_DIR, slug, "meta.json");
   try {
     const raw = await fs.readFile(metaPath, "utf-8");
@@ -176,7 +199,7 @@ function decodeDataUrl(s: string): { data: Buffer; mimeType: string } | null {
   return { mimeType: match[1], data: Buffer.from(match[2], "base64") };
 }
 
-async function saveImages(
+export async function saveImages(
   projectSlug: string,
   fragmentId: string,
   sources: string[]
@@ -218,13 +241,22 @@ async function saveImages(
         continue;
       }
       const stat = statSync(src);
+      if (!stat.isFile()) {
+        warnings.push(`Not a regular file: ${src}`);
+        continue;
+      }
       if (stat.size > MAX_IMAGE_SIZE) {
         warnings.push(
           `Image too large (${(stat.size / 1024 / 1024).toFixed(1)}MB > 10MB): ${src}`
         );
         continue;
       }
-      const ext = path.extname(src) || ".png";
+      const ext = path.extname(src).toLowerCase() || ".png";
+      const allowedExts = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"];
+      if (!allowedExts.includes(ext)) {
+        warnings.push(`Unsupported image extension: "${ext}"`);
+        continue;
+      }
       const dest = path.join(imagesDir, `${i}${ext}`);
       copyFileSync(src, dest);
       saved.push(`../images/${fragmentId}/${i}${ext}`);
@@ -246,15 +278,16 @@ export async function writeFragment(
   imagePaths: string[] = []
 ): Promise<Fragment> {
   init();
+  assertSafeSlug(projectSlug);
   const projectDir = path.join(PROJECTS_DIR, projectSlug);
   if (!existsSync(projectDir)) throw new Error(`Project "${projectSlug}" not found`);
 
   const fragDir = path.join(projectDir, "fragments");
   ensureDir(fragDir);
 
-  const filename = timestampFile();
-  const ts = new Date().toISOString();
   const id = generateId();
+  const filename = timestampFile(id);
+  const ts = new Date().toISOString();
 
   const { paths: images, warnings: imageWarnings } = await saveImages(projectSlug, id, imagePaths);
 
@@ -304,7 +337,8 @@ export async function updateFragment(
     tags?: string[];
     characters?: string[];
     places?: string[];
-    images?: string[];
+    images?: string[];       // replace: treats entries as source files or paths
+    addImages?: string[];    // append: saves to existing dir, adds to images list
   }
 ): Promise<Fragment | null> {
   const frag = await findFragmentById(projectSlug, fragmentId);
@@ -313,7 +347,13 @@ export async function updateFragment(
   const newContent = updates.content ?? frag.content;
   let newImages = frag.images;
   let newImageWarnings: string[] = [];
-  if (updates.images !== undefined) {
+  if (updates.addImages !== undefined && updates.addImages.length > 0) {
+    // add to existing — saves into existing fragment dir, keeps old images
+    const result = await saveImages(projectSlug, fragmentId, updates.addImages);
+    newImages = [...frag.images, ...result.paths];
+    newImageWarnings = result.warnings;
+  } else if (updates.images !== undefined) {
+    // full replace — clears old dir, saves new from sources
     const imagesDir = path.join(PROJECTS_DIR, projectSlug, "images", fragmentId);
     if (existsSync(imagesDir)) rmSync(imagesDir, { recursive: true, force: true });
     const result = await saveImages(projectSlug, fragmentId, updates.images);
@@ -367,15 +407,15 @@ export async function mergeFragments(
   fragmentIds: string[],
   deleteSource = false
 ): Promise<Fragment | null> {
-  if (!fragmentIds || fragmentIds.length === 0) return null;
+  if (!fragmentIds || fragmentIds.length < 2) return null;
 
-  // resolve and sort by timestamp
+  // resolve and sort by timestamp — all must exist
   const resolved: Fragment[] = [];
   for (const id of fragmentIds) {
     const f = await findFragmentById(projectSlug, id);
-    if (f) resolved.push(f);
+    if (!f) throw new Error(`Fragment not found: ${id}`);
+    resolved.push(f);
   }
-  if (resolved.length === 0) return null;
   resolved.sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
