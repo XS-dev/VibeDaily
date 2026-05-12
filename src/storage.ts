@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { existsSync, mkdirSync, copyFileSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, rmSync } from "node:fs";
 import matter from "gray-matter";
 import type {
   Fragment,
@@ -230,10 +230,12 @@ export async function updateFragment(
   if (!frag) return null;
 
   const newContent = updates.content ?? frag.content;
-  const newImages =
-    updates.images !== undefined
-      ? await saveImages(projectSlug, fragmentId, updates.images)
-      : frag.images;
+  let newImages = frag.images;
+  if (updates.images !== undefined) {
+    const imagesDir = path.join(PROJECTS_DIR, projectSlug, "images", fragmentId);
+    if (existsSync(imagesDir)) rmSync(imagesDir, { recursive: true, force: true });
+    newImages = await saveImages(projectSlug, fragmentId, updates.images);
+  }
 
   const fm: Record<string, unknown> = {
     id: frag.id,
@@ -267,6 +269,8 @@ export async function deleteFragment(
   const frag = await findFragmentById(projectSlug, fragmentId);
   if (!frag) return false;
   await fs.unlink(frag.path);
+  const imagesDir = path.join(PROJECTS_DIR, projectSlug, "images", fragmentId);
+  if (existsSync(imagesDir)) rmSync(imagesDir, { recursive: true, force: true });
   return true;
 }
 

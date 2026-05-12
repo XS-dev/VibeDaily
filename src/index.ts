@@ -8,7 +8,7 @@ import type { FragmentType, ProjectType } from "./types.js";
 // ---- type inference ----
 
 const DIARY_KEYWORDS = [
-  "今天", "今天", "早上", "晚上", "昨天", "明天", "心情",
+  "今天", "早上", "晚上", "昨天", "明天", "心情",
   "感觉", "日记", "记录", "日常",
 ];
 const NOVEL_KEYWORDS = [
@@ -157,24 +157,17 @@ server.registerTool(
     let proj = config.currentProject;
 
     if (!proj) {
-      // auto-create default diary project
-      try {
+      // auto-create or find default diary project
+      const projects = await s.listProjects();
+      const diary = projects.find((p) => p.type === "diary");
+      if (diary) {
+        proj = diary.slug;
+      } else {
         const meta = await s.createProject("日记", "diary", "日常日记");
         proj = meta.slug;
-        config.currentProject = proj;
-        await s.writeConfig(config);
-      } catch {
-        // project may already exist from race; try listing
-        const projects = await s.listProjects();
-        const diary = projects.find((p) => p.type === "diary");
-        proj = diary?.slug || "日记";
-        if (!diary) {
-          const meta = await s.createProject("日记", "diary", "日常日记");
-          proj = meta.slug;
-        }
-        config.currentProject = proj;
-        await s.writeConfig(config);
       }
+      config.currentProject = proj;
+      await s.writeConfig(config);
     }
 
     const today = new Date().toISOString().slice(0, 10);

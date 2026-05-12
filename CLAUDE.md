@@ -19,7 +19,7 @@ npm run dev      # Build + run
 
 ```
 src/
-  index.ts     — McpServer instance, all 16 tool registrations, zod/v4 schemas
+  index.ts     — McpServer instance, all 17 tool registrations, zod/v4 schemas
   storage.ts   — Filesystem layer: fragments (Markdown + gray-matter frontmatter),
                  projects, characters, places, global config
   types.ts     — Shared TypeScript types
@@ -40,7 +40,7 @@ config.json         — Global config (currentProject)
 - Fragments are Markdown files with gray-matter frontmatter — human-readable, git-friendly.
 - Type inference (`diary`/`novel`/`idea`/`note`) uses keyword matching when not explicitly provided.
 - `weave` tool returns raw fragments; Claude stitches them — keeps the plugin simple.
-- Dependencies: `@modelcontextprotocol/sdk` (MCP server), `gray-matter` (frontmatter), `zod` (schema validation via SDK re-export).
+- Dependencies: `@modelcontextprotocol/sdk` (MCP server), `gray-matter` (frontmatter), `zod` (schema validation).
 
 ## Capabilities & Features
 
@@ -51,7 +51,7 @@ Registered via `.mcp.json` at the repo root. Use a relative path (`dist/index.js
 ### Data Model
 
 - **Project** — diary or novel. Has a slug (URL-safe name), type, description, and optional tags.
-- **Fragment** — a single piece of writing. Has a type, content, timestamp, tags, and optional associations to characters and places.
+- **Fragment** — a single piece of writing. Has a type, content, timestamp, tags, images, and optional associations to characters and places.
 - **Character** (novel projects) — name, aliases, description, personality traits, notes.
 - **Place** (novel projects) — name, description, notes.
 - **Global config** — stores `currentProject` for default-project convenience.
@@ -70,16 +70,17 @@ When `jot` is called without an explicit `type`, the system infers one:
 
 If the project itself has a type (`diary` or `novel`), that takes precedence over keyword matching.
 
-### All 16 Tools
+### All 17 Tools
 
 #### Fragment CRUD
 | Tool | Description |
 |------|-------------|
-| `jot` | Record a fragment. Content is the only required field. Type auto-inferred, project defaults to current. Supports tags, characters, places. |
+| `jot` | Record a fragment. Content is the only required field. Type auto-inferred, project defaults to current. Supports tags, characters, places, images. |
+| `quick_jot` | Ultra-low-friction diary entry. Auto-creates project if needed, type is always `diary`, auto-tags with today's date. Supports images. |
 | `list_fragments` | List fragments with filters: project, type, tags (any match). Paginated via `limit`/`offset`. Returns newest first with 100-char previews. |
 | `get_fragment` | Read a single fragment in full, including all metadata and complete content. |
-| `update_fragment` | Edit content, type, tags, characters, or places of an existing fragment. All fields optional. |
-| `delete_fragment` | Permanently delete a fragment by ID. |
+| `update_fragment` | Edit content, type, tags, characters, places, or images of an existing fragment. All fields optional. |
+| `delete_fragment` | Permanently delete a fragment by ID. Also cleans up associated images. |
 | `search_fragments` | Full-text search across all projects' fragments. Case-insensitive, returns previews. |
 
 #### Project Management
