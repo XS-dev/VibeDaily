@@ -46,7 +46,7 @@ config.json         — Global config (currentProject)
 
 ### MCP Integration
 
-Registered via `.mcp.json` at the repo root. Use a relative path (`./dist/index.js`) for the MCP server entry — Claude Code resolves it from the project root. After `npm run build`, the MCP server starts automatically when Claude Code opens this project.
+Registered via `.mcp.json` at the repo root. Use a relative path (`dist/index.js`) for the MCP server entry — Claude Code resolves it from the project root. After `npm run build`, the MCP server starts automatically when Claude Code opens this project.
 
 ### Data Model
 
