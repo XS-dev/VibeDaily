@@ -79,16 +79,6 @@ function projectDir(projectSlug: string): string {
   return target;
 }
 
-async function assertProjectExists(projectSlug: string): Promise<ProjectMeta> {
-  const dir = projectDir(projectSlug);
-  const metaPath = path.join(dir, "meta.json");
-  try {
-    return JSON.parse(await fs.readFile(metaPath, "utf-8"));
-  } catch {
-    throw new Error(`Project "${projectSlug}" not found`);
-  }
-}
-
 // ---- init ----
 
 export function init(): string {
