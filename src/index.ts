@@ -497,6 +497,12 @@ server.registerTool(
     },
   },
   async ({ project }) => {
+    const exists = await s.getProject(project);
+    if (!exists) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ ok: false, error: `Project "${project}" not found` }) }],
+      };
+    }
     const config = await s.readConfig();
     config.currentProject = project;
     await s.writeConfig(config);

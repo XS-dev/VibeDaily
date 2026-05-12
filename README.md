@@ -34,7 +34,7 @@ The MCP server auto-starts via `.mcp.json` when you open this project in Claude 
 
 No terminal switching, no confirmation prompts, no file management.
 
-### 18 MCP Tools
+### 19 MCP Tools
 
 #### Fragment CRUD
 | Tool | Description |

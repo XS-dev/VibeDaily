@@ -67,16 +67,26 @@ function timestampFile(id: string): string {
 
 const SAFE_SLUG_RE = /^[a-z0-9一-鿿-]+$/i;
 
-function assertSafeSlug(slug: string): string {
-  if (!SAFE_SLUG_RE.test(slug)) {
-    throw new Error(`Invalid project slug: "${slug}"`);
+function projectDir(projectSlug: string): string {
+  if (!SAFE_SLUG_RE.test(projectSlug)) {
+    throw new Error(`Invalid project slug: "${projectSlug}"`);
   }
   const root = path.resolve(PROJECTS_DIR);
-  const target = path.resolve(root, slug);
+  const target = path.resolve(root, projectSlug);
   if (!target.startsWith(root + path.sep) && target !== root) {
     throw new Error("Project path escapes data directory");
   }
   return target;
+}
+
+async function assertProjectExists(projectSlug: string): Promise<ProjectMeta> {
+  const dir = projectDir(projectSlug);
+  const metaPath = path.join(dir, "meta.json");
+  try {
+    return JSON.parse(await fs.readFile(metaPath, "utf-8"));
+  } catch {
+    throw new Error(`Project "${projectSlug}" not found`);
+  }
 }
 
 // ---- init ----
@@ -124,8 +134,8 @@ export async function listProjects(): Promise<ProjectMeta[]> {
 }
 
 export async function getProject(slug: string): Promise<ProjectMeta | null> {
-  assertSafeSlug(slug);
-  const metaPath = path.join(PROJECTS_DIR, slug, "meta.json");
+  const dir = projectDir(slug);
+  const metaPath = path.join(dir, "meta.json");
   try {
     const raw = await fs.readFile(metaPath, "utf-8");
     return JSON.parse(raw);
@@ -199,13 +209,23 @@ function decodeDataUrl(s: string): { data: Buffer; mimeType: string } | null {
   return { mimeType: match[1], data: Buffer.from(match[2], "base64") };
 }
 
+async function nextImageIndex(dir: string): Promise<number> {
+  if (!existsSync(dir)) return 0;
+  const files = await fs.readdir(dir);
+  const nums = files
+    .map((f) => Number.parseInt(path.parse(f).name, 10))
+    .filter(Number.isFinite);
+  return nums.length === 0 ? 0 : Math.max(...nums) + 1;
+}
+
 export async function saveImages(
   projectSlug: string,
   fragmentId: string,
-  sources: string[]
+  sources: string[],
+  startIndex = 0
 ): Promise<{ paths: string[]; warnings: string[] }> {
   if (!sources || sources.length === 0) return { paths: [], warnings: [] };
-  const imagesDir = path.join(PROJECTS_DIR, projectSlug, "images", fragmentId);
+  const imagesDir = path.join(projectDir(projectSlug), "images", fragmentId);
   ensureDir(imagesDir);
   const saved: string[] = [];
   const warnings: string[] = [];
@@ -230,10 +250,11 @@ export async function saveImages(
         warnings.push(`Unsupported image type: ${decoded.mimeType} at index ${i}`);
         continue;
       }
+      const idx = startIndex + i;
       const ext = MIME_TO_EXT[decoded.mimeType] || ".png";
-      const dest = path.join(imagesDir, `${i}${ext}`);
+      const dest = path.join(imagesDir, `${idx}${ext}`);
       writeFileSync(dest, decoded.data);
-      saved.push(`../images/${fragmentId}/${i}${ext}`);
+      saved.push(`../images/${fragmentId}/${idx}${ext}`);
     } else {
       // ---- file path ----
       if (!existsSync(src)) {
@@ -251,15 +272,16 @@ export async function saveImages(
         );
         continue;
       }
+      const idx = startIndex + i;
       const ext = path.extname(src).toLowerCase() || ".png";
       const allowedExts = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"];
       if (!allowedExts.includes(ext)) {
         warnings.push(`Unsupported image extension: "${ext}"`);
         continue;
       }
-      const dest = path.join(imagesDir, `${i}${ext}`);
+      const dest = path.join(imagesDir, `${idx}${ext}`);
       copyFileSync(src, dest);
-      saved.push(`../images/${fragmentId}/${i}${ext}`);
+      saved.push(`../images/${fragmentId}/${idx}${ext}`);
     }
   }
 
@@ -278,11 +300,10 @@ export async function writeFragment(
   imagePaths: string[] = []
 ): Promise<Fragment> {
   init();
-  assertSafeSlug(projectSlug);
-  const projectDir = path.join(PROJECTS_DIR, projectSlug);
-  if (!existsSync(projectDir)) throw new Error(`Project "${projectSlug}" not found`);
+  const pd = projectDir(projectSlug);
+  if (!existsSync(pd)) throw new Error(`Project "${projectSlug}" not found`);
 
-  const fragDir = path.join(projectDir, "fragments");
+  const fragDir = path.join(pd, "fragments");
   ensureDir(fragDir);
 
   const id = generateId();
@@ -348,13 +369,14 @@ export async function updateFragment(
   let newImages = frag.images;
   let newImageWarnings: string[] = [];
   if (updates.addImages !== undefined && updates.addImages.length > 0) {
-    // add to existing — saves into existing fragment dir, keeps old images
-    const result = await saveImages(projectSlug, fragmentId, updates.addImages);
+    // add to existing — start from next available index to avoid overwrites
+    const startIdx = await nextImageIndex(path.join(projectDir(projectSlug), "images", fragmentId));
+    const result = await saveImages(projectSlug, fragmentId, updates.addImages, startIdx);
     newImages = [...frag.images, ...result.paths];
     newImageWarnings = result.warnings;
   } else if (updates.images !== undefined) {
     // full replace — clears old dir, saves new from sources
-    const imagesDir = path.join(PROJECTS_DIR, projectSlug, "images", fragmentId);
+    const imagesDir = path.join(projectDir(projectSlug), "images", fragmentId);
     if (existsSync(imagesDir)) rmSync(imagesDir, { recursive: true, force: true });
     const result = await saveImages(projectSlug, fragmentId, updates.images);
     newImages = result.paths;
@@ -395,7 +417,7 @@ export async function deleteFragment(
   const frag = await findFragmentById(projectSlug, fragmentId);
   if (!frag) return false;
   await fs.unlink(frag.path);
-  const imagesDir = path.join(PROJECTS_DIR, projectSlug, "images", fragmentId);
+  const imagesDir = path.join(projectDir(projectSlug), "images", fragmentId);
   if (existsSync(imagesDir)) rmSync(imagesDir, { recursive: true, force: true });
   return true;
 }
@@ -445,13 +467,13 @@ export async function mergeFragments(
   );
 
   // copy source images into merged fragment's images dir
-  const mergedImagesDir = path.join(PROJECTS_DIR, projectSlug, "images", merged.id);
+  const mergedImagesDir = path.join(projectDir(projectSlug), "images", merged.id);
   let imgIndex = 0;
   const perFragmentImageMap: Map<number, string[]> = new Map(); // idx -> new paths
 
   for (let fi = 0; fi < resolved.length; fi++) {
     const f = resolved[fi];
-    const srcDir = path.join(PROJECTS_DIR, projectSlug, "images", f.id);
+    const srcDir = path.join(projectDir(projectSlug), "images", f.id);
     const altDir = path.join(OLD_BASE, "projects", projectSlug, "images", f.id);
     const dir = existsSync(srcDir) ? srcDir : existsSync(altDir) ? altDir : null;
     if (!dir) continue;
@@ -605,7 +627,7 @@ async function findFragmentById(
   projectSlug: string,
   fragmentId: string
 ): Promise<Fragment | null> {
-  const fragDir = path.join(PROJECTS_DIR, projectSlug, "fragments");
+  const fragDir = path.join(projectDir(projectSlug), "fragments");
   if (!existsSync(fragDir)) return null;
   const files = await fs.readdir(fragDir);
   for (const file of files) {
@@ -635,7 +657,7 @@ async function findFragmentById(
 // ---- characters ----
 
 async function readCharacters(projectSlug: string): Promise<Character[]> {
-  const p = path.join(PROJECTS_DIR, projectSlug, "characters.json");
+  const p = path.join(projectDir(projectSlug), "characters.json");
   try {
     const raw = await fs.readFile(p, "utf-8");
     return JSON.parse(raw);
@@ -648,7 +670,7 @@ async function writeCharacters(
   projectSlug: string,
   chars: Character[]
 ): Promise<void> {
-  const p = path.join(PROJECTS_DIR, projectSlug, "characters.json");
+  const p = path.join(projectDir(projectSlug), "characters.json");
   await fs.writeFile(p, JSON.stringify(chars, null, 2));
 }
 
@@ -699,7 +721,7 @@ export async function updateCharacter(
 // ---- places ----
 
 async function readPlaces(projectSlug: string): Promise<Place[]> {
-  const p = path.join(PROJECTS_DIR, projectSlug, "places.json");
+  const p = path.join(projectDir(projectSlug), "places.json");
   try {
     const raw = await fs.readFile(p, "utf-8");
     return JSON.parse(raw);
@@ -712,7 +734,7 @@ async function writePlaces(
   projectSlug: string,
   places: Place[]
 ): Promise<void> {
-  const p = path.join(PROJECTS_DIR, projectSlug, "places.json");
+  const p = path.join(projectDir(projectSlug), "places.json");
   await fs.writeFile(p, JSON.stringify(places, null, 2));
 }
 
