@@ -1,0 +1,27 @@
+{
+  "name": "vibedaily",
+  "version": "0.1.0",
+  "description": "Fragment journaling & novel writing MCP plugin — capture thoughts in seconds without leaving Claude Code",
+  "author": {
+    "name": "XS-dev",
+    "url": "https://github.com/XS-dev"
+  },
+  "homepage": "https://github.com/XS-dev/VibeDaily",
+  "repository": "https://github.com/XS-dev/VibeDaily",
+  "license": "MIT",
+  "keywords": [
+    "diary",
+    "journal",
+    "writing",
+    "novel",
+    "notes",
+    "mcp",
+    "claude-code"
+  ],
+  "mcpServers": {
+    "vibedaily": {
+      "command": "node",
+      "args": ["dist/index.js"]
+    }
+  }
+}
