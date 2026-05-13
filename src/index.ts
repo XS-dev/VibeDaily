@@ -705,7 +705,8 @@ server.registerTool(
   "merge_fragments",
   {
     description:
-      "Merge multiple fragments into one. Provide fragment IDs directly, or use `date` to merge all fragments from a single day. " +
+      "Merge multiple fragments into one. Provide fragment IDs directly, or use `date` to merge all fragments from a single day, " +
+      "or combine `date` + `days` to merge a range (e.g. last 3 days). " +
       "Optionally delete source fragments after merging.",
     inputSchema: {
       project: z.string().describe("Project slug"),
@@ -716,14 +717,21 @@ server.registerTool(
       date: z
         .string()
         .optional()
-        .describe("Merge all fragments from this ISO date (e.g. 2026-05-12). Ignored if fragment_ids is provided."),
+        .describe("Merge fragments from this ISO date (e.g. 2026-05-12). Defaults to today. Ignored if fragment_ids is provided."),
+      days: z
+        .number()
+        .int()
+        .min(2)
+        .max(365)
+        .optional()
+        .describe("Number of consecutive past days to merge, ending at `date`. E.g. date=2026-05-13, days=3 merges 05-11, 05-12, 05-13."),
       delete_source: z
         .boolean()
         .default(false)
         .describe("Delete source fragments after merging"),
     },
   },
-  async ({ project, fragment_ids, date, delete_source }) => {
+  async ({ project, fragment_ids, date, days, delete_source }) => {
     if (!project) {
       const config = await s.readConfig();
       if (!config.currentProject) {
@@ -737,14 +745,26 @@ server.registerTool(
     let ids: string[];
     if (fragment_ids && fragment_ids.length > 0) {
       ids = fragment_ids;
-    } else if (date) {
+    } else if (date || days) {
+      const endDate = date || s.localDateString();
+      const count = days || 1;
+      // compute date range [startDate, endDate] inclusive
+      const dateSet = new Set<string>();
+      const d = new Date(endDate + "T00:00:00");
+      for (let i = 0; i < count; i++) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        dateSet.add(`${yyyy}-${mm}-${dd}`);
+        d.setDate(d.getDate() - 1);
+      }
       const all = await s.listFragments(project, undefined, undefined, 200);
       ids = all
-        .filter((f) => f.timestamp.startsWith(date))
+        .filter((f) => dateSet.has(f.timestamp.slice(0, 10)))
         .map((f) => f.id);
     } else {
       return {
-        content: [{ type: "text" as const, text: "Provide fragment_ids or a date to merge." }],
+        content: [{ type: "text" as const, text: "Provide fragment_ids, date, or days to merge." }],
       };
     }
 
