@@ -117,7 +117,7 @@ cp .claude/commands/j.md ~/.claude/commands/j.md
 ## 数据目录
 
 ```
-vibedaily-data/                   （项目根目录，已 .gitignore）
+~/vibedaily-data/                   （用户主目录，固定路径）
   config.json                     — 全局配置（当前项目）
   projects/{slug}/
     meta.json                     — 项目元数据

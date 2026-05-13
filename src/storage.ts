@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { cpSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { existsSync, mkdirSync, copyFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import matter from "gray-matter";
@@ -13,11 +14,9 @@ import type {
   ProjectType,
 } from "./types.js";
 
-const BASE = path.join(process.cwd(), "vibedaily-data");
-const OLD_BASE = path.join(
-  process.env.HOME || process.env.USERPROFILE || "",
-  ".vibedaily"
-);
+const HOME = os.homedir();
+const BASE = path.join(HOME, "vibedaily-data");
+const OLD_BASE = path.join(HOME, ".vibedaily");
 const PROJECTS_DIR = path.join(BASE, "projects");
 const CONFIG_PATH = path.join(BASE, "config.json");
 

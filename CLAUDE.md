@@ -25,7 +25,7 @@ src/
   types.ts     — Shared TypeScript types
 ```
 
-Data stored at `./vibedaily-data/` (project root):
+Data stored at `~/vibedaily-data/` (user home):
 ```
 projects/{slug}/
   meta.json         — Project metadata
@@ -59,7 +59,7 @@ Registered via `.mcp.json` at the repo root. Use a relative path (`dist/index.js
 - **Place** (novel projects) — name, description, notes.
 - **Global config** — stores `currentProject` for default-project convenience.
 
-Storage: Markdown files with YAML frontmatter indexed under `./vibedaily-data/`. Human-readable, git-friendly. Migrated from `~/.vibedaily/` on first run.
+Storage: Markdown files with YAML frontmatter indexed under `~/vibedaily-data/`. Fixed user-home path — works from any directory. Migrated from `~/.vibedaily/` on first run.
 
 ### Fragment Types & Auto-Inference
 

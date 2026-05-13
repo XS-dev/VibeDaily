@@ -110,7 +110,7 @@ When no explicit `type` is given, the tool infers from content keywords across b
 ## Data Structure
 
 ```
-vibedaily-data/                   (project root, .gitignored)
+~/vibedaily-data/                   (user home, fixed path)
   config.json                     — Global config (current project)
   projects/{slug}/
     meta.json                     — Project metadata
