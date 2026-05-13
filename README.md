@@ -11,11 +11,27 @@ VibeDaily is an MCP (Model Context Protocol) plugin that turns Claude Code into 
 ## Quick Start
 
 ```bash
+git clone https://github.com/XS-dev/VibeDaily.git
+cd VibeDaily
 npm install
 npm run build
 ```
 
 The MCP server auto-starts via `.mcp.json` when you open this project in Claude Code.
+
+### Use Everywhere (Global Setup)
+
+To make VibeDaily available from any directory:
+
+```bash
+# Register as a user-level MCP server
+claude mcp add vibedaily -s user -- node /absolute/path/to/VibeDaily/dist/index.js
+
+# Optional: enable /j slash command globally
+cp .claude/commands/j.md ~/.claude/commands/j.md
+```
+
+Then `记一下`, `jot`, and `/j` work no matter which project you're in.
 
 ## Features
 
